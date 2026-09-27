@@ -7,7 +7,8 @@ const logAudit = require('../utils/auditLogger');
 // @access  Private
 const getInspectionByJobId = async (req, res) => {
   const inspection = await Inspection.findOne({ serviceJobId: req.params.serviceJobId })
-    .populate('mechanicId', 'name email phone');
+    .populate('mechanicId', 'name email phone')
+    .populate('requestedParts.partId');
   
   if (!inspection) {
     return res.status(404).json({ message: 'Inspection record not found for this service job' });
@@ -20,7 +21,7 @@ const getInspectionByJobId = async (req, res) => {
 // @route   POST /api/inspections
 // @access  Private (Mechanic / Advisor / Admin)
 const saveInspection = async (req, res) => {
-  const { serviceJobId, checklist, overallDiagnosis, recommendedRepairs, inspectionImages } = req.body;
+  const { serviceJobId, checklist, overallDiagnosis, recommendedRepairs, inspectionImages, requestedParts } = req.body;
 
   const job = await ServiceJob.findById(serviceJobId);
   if (!job) {
@@ -30,10 +31,11 @@ const saveInspection = async (req, res) => {
   let inspection = await Inspection.findOne({ serviceJobId });
 
   if (inspection) {
-    inspection.checklist = checklist || inspection.checklist;
-    inspection.overallDiagnosis = overallDiagnosis || inspection.overallDiagnosis;
-    inspection.recommendedRepairs = recommendedRepairs || inspection.recommendedRepairs;
-    inspection.inspectionImages = inspectionImages || inspection.inspectionImages;
+    if (checklist) inspection.checklist = checklist;
+    if (overallDiagnosis) inspection.overallDiagnosis = overallDiagnosis;
+    if (recommendedRepairs) inspection.recommendedRepairs = recommendedRepairs;
+    if (inspectionImages) inspection.inspectionImages = inspectionImages;
+    if (requestedParts) inspection.requestedParts = requestedParts;
     inspection.completedAt = new Date();
     await inspection.save();
   } else {
@@ -43,6 +45,7 @@ const saveInspection = async (req, res) => {
       checklist,
       overallDiagnosis,
       recommendedRepairs: recommendedRepairs || [],
+      requestedParts: requestedParts || [],
       inspectionImages: inspectionImages || [],
       completedAt: new Date(),
     });

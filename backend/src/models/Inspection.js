@@ -7,6 +7,12 @@ const checklistItemSchema = new mongoose.Schema({
   notes: { type: String, default: '' },
 });
 
+const requestedPartSchema = new mongoose.Schema({
+  partId: { type: mongoose.Schema.Types.ObjectId, ref: 'Part', required: true },
+  quantity: { type: Number, default: 1, min: 1 },
+  notes: { type: String, default: '' },
+});
+
 const inspectionSchema = new mongoose.Schema(
   {
     serviceJobId: { type: mongoose.Schema.Types.ObjectId, ref: 'ServiceJob', required: true, unique: true },
@@ -14,6 +20,7 @@ const inspectionSchema = new mongoose.Schema(
     checklist: [checklistItemSchema],
     overallDiagnosis: { type: String, required: true },
     recommendedRepairs: [{ type: String }],
+    requestedParts: [requestedPartSchema],
     inspectionImages: [{ type: String }],
     completedAt: { type: Date, default: Date.now },
   },

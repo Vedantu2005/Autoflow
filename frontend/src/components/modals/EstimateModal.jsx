@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import API from '../../services/api';
 import { useNotification } from '../../context/NotificationContext';
-import { X, Calculator, Plus, Trash2, AlertTriangle, Send } from 'lucide-react';
+import { X, Calculator, Plus, Trash2, AlertTriangle, Send, CheckCircle2, Sparkles, Wrench } from 'lucide-react';
 
 export const EstimateModal = ({ isOpen, onClose, onSuccess, job }) => {
   const [availableParts, setAvailableParts] = useState([]);
@@ -10,18 +10,156 @@ export const EstimateModal = ({ isOpen, onClose, onSuccess, job }) => {
   const [taxPercent, setTaxPercent] = useState(18);
   const [discountAmount, setDiscountAmount] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [inspectionData, setInspectionData] = useState(null);
+  const [autoFilled, setAutoFilled] = useState(false);
   const { showToast } = useNotification();
 
   useEffect(() => {
-    if (isOpen) {
-      API.get('/parts')
-        .then((res) => {
-          setAvailableParts(res.data);
-          setSelectedParts([]);
+    if (isOpen && job) {
+      setLoading(true);
+      Promise.all([
+        API.get('/parts'),
+        API.get(`/inspections/job/${job._id}`).catch(() => ({ data: null })),
+      ])
+        .then(([partsRes, inspRes]) => {
+          const parts = partsRes.data || [];
+          setAvailableParts(parts);
+
+          const insp = inspRes.data;
+          setInspectionData(insp);
+
+          const prefilledParts = [];
+          const prefilledLabour = [];
+
+          if (insp) {
+            // 1. If mechanic explicitly requisitioned parts
+            if (insp.requestedParts && insp.requestedParts.length > 0) {
+              insp.requestedParts.forEach((rp) => {
+                const pId = rp.partId?._id || rp.partId;
+                const matched = parts.find((p) => p._id === pId);
+                if (matched && !prefilledParts.some((p) => p.partId === matched._id)) {
+                  prefilledParts.push({
+                    partId: matched._id,
+                    quantity: rp.quantity || 1,
+                    name: matched.name,
+                    price: matched.sellingPrice,
+                    stock: matched.currentStock,
+                  });
+                }
+              });
+            }
+
+            // 2. Auto-match from checklist items marked REPLACE or NEEDS_ATTENTION
+            if (insp.checklist && insp.checklist.length > 0) {
+              const issues = insp.checklist.filter(
+                (c) => c.condition === 'REPLACE' || c.condition === 'NEEDS_ATTENTION'
+              );
+
+              issues.forEach((ci) => {
+                const itemLower = ci.item.toLowerCase();
+                const matched = parts.find((p) => {
+                  const pName = p.name.toLowerCase();
+                  if (itemLower.includes('oil') && !itemLower.includes('filter') && pName.includes('oil') && !pName.includes('filter')) return true;
+                  if (itemLower.includes('oil filter') && pName.includes('oil filter')) return true;
+                  if (itemLower.includes('brake pad') && pName.includes('brake pad')) return true;
+                  if (itemLower.includes('brake shoe') && pName.includes('brake shoe')) return true;
+                  if (itemLower.includes('brake fluid') && pName.includes('brake fluid')) return true;
+                  if (itemLower.includes('battery') && pName.includes('battery')) return true;
+                  if (itemLower.includes('spark') && pName.includes('spark')) return true;
+                  if ((itemLower.includes('strut') || itemLower.includes('shock')) && (pName.includes('strut') || pName.includes('shock'))) return true;
+                  if (itemLower.includes('air filter') && pName.includes('air filter')) return true;
+                  if (itemLower.includes('cabin') && pName.includes('cabin')) return true;
+                  if (itemLower.includes('coolant') && pName.includes('coolant')) return true;
+                  if (itemLower.includes('wiper') && pName.includes('wiper')) return true;
+                  return false;
+                });
+
+                if (matched && !prefilledParts.some((p) => p.partId === matched._id)) {
+                  prefilledParts.push({
+                    partId: matched._id,
+                    quantity: 1,
+                    name: matched.name,
+                    price: matched.sellingPrice,
+                    stock: matched.currentStock,
+                  });
+                }
+              });
+            }
+
+            // 3. Match from recommendedRepairs strings
+            if (insp.recommendedRepairs && insp.recommendedRepairs.length > 0) {
+              insp.recommendedRepairs.forEach((rep) => {
+                const repLower = rep.toLowerCase();
+                const matched = parts.find((p) => {
+                  const pName = p.name.toLowerCase();
+                  if (repLower.includes('oil filter') && pName.includes('oil filter')) return true;
+                  if (repLower.includes('engine oil') && pName.includes('oil') && !pName.includes('filter')) return true;
+                  if (repLower.includes('brake pad') && pName.includes('brake pad')) return true;
+                  if (repLower.includes('battery') && pName.includes('battery')) return true;
+                  if (repLower.includes('coolant') && pName.includes('coolant')) return true;
+                  return false;
+                });
+
+                if (matched && !prefilledParts.some((p) => p.partId === matched._id)) {
+                  prefilledParts.push({
+                    partId: matched._id,
+                    quantity: 1,
+                    name: matched.name,
+                    price: matched.sellingPrice,
+                    stock: matched.currentStock,
+                  });
+                }
+
+                // Add to labour items!
+                prefilledLabour.push({
+                  description: rep.replace(/^Replace\s+/i, 'Install & Fit '),
+                  hours: 1,
+                  ratePerHour: 450,
+                });
+              });
+            }
+          }
+
+          // Fallback if no specific parts matched: suggest primary periodic maintenance parts
+          if (prefilledParts.length === 0 && parts.length > 0) {
+            const oilPart = parts.find((p) => p.name.toLowerCase().includes('engine oil'));
+            const filterPart = parts.find((p) => p.name.toLowerCase().includes('oil filter'));
+            if (oilPart) {
+              prefilledParts.push({
+                partId: oilPart._id,
+                quantity: 1,
+                name: oilPart.name,
+                price: oilPart.sellingPrice,
+                stock: oilPart.currentStock,
+              });
+            }
+            if (filterPart) {
+              prefilledParts.push({
+                partId: filterPart._id,
+                quantity: 1,
+                name: filterPart.name,
+                price: filterPart.sellingPrice,
+                stock: filterPart.currentStock,
+              });
+            }
+          }
+
+          if (prefilledLabour.length === 0) {
+            prefilledLabour.push({
+              description: `Comprehensive Vehicle Diagnostic & Inspection (${job.serviceType || 'Periodic Service'})`,
+              hours: 1.5,
+              ratePerHour: 450,
+            });
+          }
+
+          setSelectedParts(prefilledParts);
+          setLabourItems(prefilledLabour);
+          setAutoFilled(true);
         })
-        .catch((err) => console.error(err));
+        .catch((err) => console.error(err))
+        .finally(() => setLoading(false));
     }
-  }, [isOpen]);
+  }, [isOpen, job]);
 
   if (!isOpen || !job) return null;
 
@@ -132,6 +270,35 @@ export const EstimateModal = ({ isOpen, onClose, onSuccess, job }) => {
         </div>
 
         <form onSubmit={handleSubmit} className="p-5 space-y-6 overflow-y-auto flex-1">
+          {/* Dynamic Auto-Population Notice */}
+          {inspectionData ? (
+            <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 flex items-start gap-3">
+              <div className="p-1 rounded-lg bg-emerald-100 text-emerald-700 shrink-0 mt-0.5">
+                <CheckCircle2 className="w-4 h-4" />
+              </div>
+              <div className="flex-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-xs font-bold text-emerald-900">
+                    Auto-Populated from Mechanic's Digital Inspection
+                  </span>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-200/70 text-emerald-800">
+                    Technician: {inspectionData.mechanicId?.name || 'Floor Mechanic'}
+                  </span>
+                </div>
+                <p className="text-[11px] text-emerald-700 mt-1">
+                  Required parts and labor operations diagnosed during vehicle physical inspection have been pre-filled automatically. Please review, adjust quantities or discounts if needed, and forward to the customer.
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div className="p-3 rounded-xl bg-sky-50 border border-sky-200 flex items-center gap-2.5 text-xs text-sky-800">
+              <Sparkles className="w-4 h-4 text-sky-600 shrink-0" />
+              <span>
+                Pre-loaded standard parts & operations for <strong>{job.serviceType}</strong>. You may add or modify items below.
+              </span>
+            </div>
+          )}
+
           {/* Parts Section */}
           <div>
             <div className="flex items-center justify-between mb-2">
