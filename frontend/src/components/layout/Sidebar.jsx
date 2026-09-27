@@ -11,6 +11,7 @@ import {
   History,
   Activity,
   CheckCircle2,
+  Users,
 } from 'lucide-react';
 
 export const Sidebar = () => {
@@ -79,6 +80,12 @@ export const Sidebar = () => {
       path: '/service-history',
       icon: History,
       roles: ['CUSTOMER', 'SERVICE_ADVISOR', 'MECHANIC', 'ADMIN'],
+    },
+    {
+      label: 'Workshop Staff',
+      path: '/staff',
+      icon: Users,
+      roles: ['ADMIN'],
     },
     {
       label: 'System Audit Trail',

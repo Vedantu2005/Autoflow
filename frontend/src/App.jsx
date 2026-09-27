@@ -18,6 +18,7 @@ import ServiceHistoryPage from './pages/ServiceHistoryPage';
 import InvoicesPage from './pages/InvoicesPage';
 import VehiclesPage from './pages/VehiclesPage';
 import BookingsPage from './pages/BookingsPage';
+import StaffManagementPage from './pages/StaffManagementPage';
 
 const ProtectedRoute = ({ children, allowedRoles }) => {
   const { user, loading } = useAuth();
@@ -153,6 +154,15 @@ export const App = () => {
               element={
                 <ProtectedRoute>
                   <ServiceHistoryPage />
+                </ProtectedRoute>
+              }
+            />
+
+            <Route
+              path="/staff"
+              element={
+                <ProtectedRoute allowedRoles={['ADMIN']}>
+                  <StaffManagementPage />
                 </ProtectedRoute>
               }
             />
