@@ -175,14 +175,46 @@ All protected endpoints require an `Authorization: Bearer <token>` HTTP header.
 
 ---
 
-## 5. Invoicing & Simulated Payments
+## 5. Invoicing & Razorpay Payments
 
 ### Issue Final Invoice
 * **Method:** `POST`
 * **Route:** `/api/invoices`
 * **Payload:** `{ "serviceJobId": "65af..." }`
 
-### Process Simulated Payment
+### Get Razorpay Public Key
+* **Method:** `GET`
+* **Route:** `/api/payments/razorpay-key`
+* **Response:** `{ "keyId": "rzp_test_RoMYE85wG1Vzew" }`
+
+### Create Razorpay Order
+* **Method:** `POST`
+* **Route:** `/api/payments/create-order`
+* **Payload:**
+  ```json
+  {
+    "invoiceId": "65af...",
+    "amount": 4897
+  }
+  ```
+* **Response:** Returns `orderId`, `amount` (in paise), `currency`, `keyId`, and invoice context for Razorpay Checkout SDK.
+
+### Verify Razorpay Payment Signature
+* **Method:** `POST`
+* **Route:** `/api/payments/verify`
+* **Payload:**
+  ```json
+  {
+    "invoiceId": "65af...",
+    "razorpay_order_id": "order_...",
+    "razorpay_payment_id": "pay_...",
+    "razorpay_signature": "...",
+    "amount": 4897
+  }
+  ```
+* **Effect:** Verifies HMAC-SHA256 signature using Razorpay Key Secret. Updates invoice status to `PAID` (or `PARTIAL`), logs transaction in `Payment` collection, creates audit log, and marks job status as `READY_FOR_DELIVERY`.
+
+### Process Cash / Counter Settlement (Fallback)
 * **Method:** `POST`
 * **Route:** `/api/payments`
 * **Payload:**
@@ -190,11 +222,11 @@ All protected endpoints require an `Authorization: Bearer <token>` HTTP header.
   {
     "invoiceId": "65af...",
     "amount": 4897,
-    "paymentMethod": "UPI",
-    "transactionRef": "UPI-892716301"
+    "paymentMethod": "CASH",
+    "transactionRef": "CASH-892716301"
   }
   ```
-* **Effect:** Sets invoice status to `PAID`, unlocking vehicle delivery (`COMPLETED`).
+* **Effect:** Records physical counter payment and updates invoice status.
 
 ---
 

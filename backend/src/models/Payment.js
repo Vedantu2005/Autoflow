@@ -9,10 +9,13 @@ const paymentSchema = new mongoose.Schema(
     amount: { type: Number, required: true },
     paymentMethod: {
       type: String,
-      enum: ['CASH', 'CARD', 'UPI', 'BANK_TRANSFER'],
-      default: 'UPI',
+      enum: ['CASH', 'CARD', 'UPI', 'BANK_TRANSFER', 'RAZORPAY'],
+      default: 'RAZORPAY',
     },
     transactionRef: { type: String, required: true },
+    razorpayOrderId: { type: String },
+    razorpayPaymentId: { type: String },
+    razorpaySignature: { type: String },
     status: {
       type: String,
       enum: ['SUCCESS', 'FAILED'],
