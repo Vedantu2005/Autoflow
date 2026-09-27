@@ -1,0 +1,3 @@
+@echo off
+echo Starting AutoFlow Smart Vehicle Service Platform...
+npm run dev
